@@ -62,9 +62,11 @@ function TopCustomerSpending({ period }) {
 					}}
 				/>
 				<div className='mt-1 px-3'>
-					<Button className='flex items-center gap-2 px-1.5 py-0.5 hover:bg-gray-100 text-sm border border-gray-200 rounded'>
-						<MdOutlineFileDownload size={20} />
-						Export
+					<Button
+						customStyle='flex justify-center items-center gap-2'
+						variant='themeInverted'
+					>
+						<MdOutlineFileDownload size={15} /> <p>Export</p>
 					</Button>
 				</div>
 			</CardHeader>
