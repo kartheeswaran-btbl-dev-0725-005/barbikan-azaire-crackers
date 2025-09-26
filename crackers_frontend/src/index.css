@@ -1,0 +1,16 @@
+@import "tailwindcss";
+
+@theme {
+  --color-primary: #0A0A0A;
+  --color-muted: #717182;
+  --color-hover-bg: #F5F5F5;
+  --color-active-text: #171717;
+  --color-button-bg: #030213;
+
+  /* Font family */
+  --inter-font-family: 'Inter', sans-serif;
+}
+
+body {
+  overflow-y: hidden;
+}
