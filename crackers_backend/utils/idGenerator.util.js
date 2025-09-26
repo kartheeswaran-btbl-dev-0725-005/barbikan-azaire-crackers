@@ -37,11 +37,13 @@ async function generateUserId() {
 // -------------------------
 // Customer
 // -------------------------
-async function generateCustomerId() {
+async function generateCustomerId(transaction) {
 	const lastCustomer = await Customer.findOne({
 		attributes: ['customer_id'],
 		order: [['createdAt', 'DESC']],
 		paranoid: false,
+		transaction,
+		lock: transaction.LOCK.UPDATE, // ✅ lock inside transaction
 	});
 
 	let next = 1;
@@ -58,11 +60,13 @@ async function generateCustomerId() {
 // -------------------------
 // Category
 // -------------------------
-async function generateCategoryId() {
+async function generateCategoryId(transaction) {
 	const lastCategory = await Category.findOne({
 		attributes: [[sequelize.fn('MAX', sequelize.col('category_id')), 'maxId']],
 		raw: true,
 		paranoid: false,
+		transaction,
+		lock: transaction.LOCK.UPDATE, // ✅ prevents race condition
 	});
 
 	let next = 1;
@@ -77,11 +81,13 @@ async function generateCategoryId() {
 // -------------------------
 // Product
 // -------------------------
-async function generateProductId() {
+async function generateProductId(transaction) {
 	const lastProduct = await Product.findOne({
 		attributes: [[sequelize.fn('MAX', sequelize.col('product_id')), 'maxId']],
 		raw: true,
 		paranoid: false,
+		transaction, // ✅ include transaction
+		lock: transaction.LOCK.UPDATE, // ✅ lock to prevent race conditions
 	});
 
 	let next = 1;
@@ -119,19 +125,24 @@ async function generateTransactionId() {
 // Payment
 // -------------------------
 async function generatePaymentId() {
-	const lastPayment = await Payment.findOne({
-		attributes: ['payment_id'],
-		order: [['createdAt', 'DESC']],
-		paranoid: false,
+	return await sequelize.transaction(async (t) => {
+		// Lock the table row for the last payment
+		const lastPayment = await Payment.findOne({
+			attributes: ['payment_id'],
+			order: [['createdAt', 'DESC']],
+			paranoid: false,
+			lock: t.LOCK.UPDATE,
+			transaction: t,
+		});
+
+		let next = 1;
+		if (lastPayment?.payment_id) {
+			const numericPart = parseInt(lastPayment.payment_id.replace(/^PAY/, ''), 10);
+			if (!isNaN(numericPart)) next = numericPart + 1;
+		}
+
+		return `PAY${next.toString().padStart(6, '0')}`;
 	});
-
-	let next = 1;
-	if (lastPayment?.payment_id) {
-		const numericPart = parseInt(lastPayment.payment_id.replace(/^PAY/, ''), 10);
-		if (!isNaN(numericPart)) next = numericPart + 1;
-	}
-
-	return `PAY${next.toString().padStart(6, '0')}`;
 }
 
 // -------------------------
@@ -146,11 +157,13 @@ async function generateStoreId() {
 // -------------------------
 // Estimate (internal)
 // -------------------------
-async function generateEstimateId() {
+async function generateEstimateId(transaction) {
 	const lastEstimate = await Estimate.findOne({
 		attributes: ['estimate_id'],
 		order: [['createdAt', 'DESC']],
 		paranoid: false,
+		transaction, // ✅ transaction passed
+		lock: transaction.LOCK.UPDATE, // ✅ lock row to prevent race condition
 	});
 
 	let next = 1;
@@ -165,17 +178,22 @@ async function generateEstimateId() {
 // -------------------------
 // Estimate Item / Quotation Item
 // -------------------------
-async function generateItemId() {
+async function generateItemId(transaction) {
+	// Fetch last item IDs from both tables using transaction
 	const [estimateItem, quotationItem] = await Promise.all([
 		EstimateItem.findOne({
 			attributes: ['item_id'],
 			order: [['item_id', 'DESC']],
 			paranoid: false,
+			transaction,
+			lock: transaction.LOCK.UPDATE,
 		}),
 		QuotationItem.findOne({
 			attributes: ['item_id'],
 			order: [['item_id', 'DESC']],
 			paranoid: false,
+			transaction,
+			lock: transaction.LOCK.UPDATE,
 		}),
 	]);
 

@@ -50,7 +50,7 @@ exports.delete = async (req, res) => {
 	try {
 		const dto = EstimateDTO(req);
 		const userPayload = {
-			tenant_id: dto.tenant_id,
+			tenant_id: req.params.tenantId,
 			organization_id: dto.organization_id,
 		};
 		const { estimateId } = req.params;
@@ -99,10 +99,16 @@ exports.getAll = async (req, res) => {
 		const page = parseInt(req.query.page) || 1;
 		const limit = parseInt(req.query.limit) || 10;
 
+		// Filters
+		const search = req.query.search || null;
+		const status = req.query.status || null;
+
 		const result = await estimateService.getAllEstimates(
 			tenantPayload,
 			page,
-			limit
+			limit,
+			search,
+			status
 		);
 
 		res.status(200).json(result);

@@ -1,4 +1,4 @@
-const { Category } = require('../models');
+const { Category, sequelize } = require('../models');
 const {
 	createCategorySchema,
 	updateCategorySchema,
@@ -16,21 +16,27 @@ exports.createCategory = async (tenantUserPayload, payload) => {
 	const { error } = createCategorySchema.validate(payload);
 	if (error) throw createError(error.details[0].message, 400);
 
-	// Generate category_id
-	const categoryId = await generateCategoryId(tenantUserPayload.tenant_id);
+	// Use a transaction to prevent race condition
+	const category = await sequelize.transaction(async (t) => {
+		// Generate category_id inside the transaction
+		const categoryId = await generateCategoryId(t);
 
-	// Insert record
-	const category = await Category.create({
-		category_id: categoryId,
-		tenant_id: tenantUserPayload.tenant_id,
-		organization_id: tenantUserPayload.organization_id,
-		name: payload.name,
-		description: payload.description || null,
-		group_by: payload.group_by,
-		status: payload.status,
+		// Insert record
+		return await Category.create(
+			{
+				category_id: categoryId,
+				tenant_id: tenantUserPayload.tenant_id,
+				organization_id: tenantUserPayload.organization_id,
+				name: payload.name,
+				description: payload.description || null,
+				group_by: payload.group_by,
+				status: payload.status,
+			},
+			{ transaction: t } // make sure the create is part of the same transaction
+		);
 	});
 
-	// 7. Response
+	// Response
 	return {
 		success: true,
 		message: 'Category created successfully',
@@ -53,7 +59,11 @@ exports.updateCategory = async (categoryId, payload, tenantUserPayload) => {
 	if (error) throw createError(error.details[0].message, 400);
 
 	const category = await Category.findOne({
-		where: { category_id: categoryId },
+		where: {
+			tenant_id: tenantUserPayload.tenant_id,
+			organization_id: tenantUserPayload.organization_id,
+			category_id: categoryId,
+		},
 	});
 	if (!category) throw createError('Category not found', 404);
 
@@ -71,7 +81,11 @@ exports.deleteCategory = async (categoryId, tenantUserPayload) => {
 	await checkPermission(tenantUserPayload, 'product');
 
 	const category = await Category.findOne({
-		where: { category_id: categoryId },
+		where: {
+			category_id: categoryId,
+			tenant_id: tenantUserPayload.tenant_id,
+			organization_id: tenantUserPayload.organization_id,
+		},
 	});
 	if (!category) throw createError('Category not found', 404);
 
@@ -89,7 +103,11 @@ exports.getCategoryById = async (tenantUserPayload, categoryId) => {
 	await checkPermission(tenantUserPayload, 'product');
 
 	const category = await Category.findOne({
-		where: { category_id: categoryId },
+		where: {
+			tenant_id: tenantUserPayload.tenant_id,
+			organization_id: tenantUserPayload.organization_id,
+			category_id: categoryId,
+		},
 	});
 
 	if (!category) throw createError('Category not found', 404);
@@ -114,7 +132,7 @@ exports.getAllCategories = async (tenantPayload, page = 1, limit = 10) => {
 	// 3. Query paginated categories
 	const { count, rows } = await Category.findAndCountAll({
 		where: { tenant_id, organization_id },
-		order: [['createdAt', 'ASC']],
+		order: [['createdAt', 'DESC']],
 		limit,
 		offset,
 		paranoid: true,

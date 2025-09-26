@@ -7,6 +7,7 @@ const {
 const { formatDatesTime } = require('../utils/formatdatetime.util');
 const { checkPermission } = require('../utils/permission.util');
 const { generateCustomerId } = require('../utils/idGenerator.util');
+const { Op } = require('sequelize');
 
 // Create Customer
 exports.createCustomer = async (customerPayload, tenantUserPayload) => {
@@ -78,7 +79,11 @@ exports.updateCustomer = async (
 
 	// 4. Find customer
 	const customer = await Customer.findOne({
-		where: { customer_id: customerId },
+		where: {
+			tenant_id: tenantUserPayload.tenant_id,
+			organization_id: tenantUserPayload.organization_id,
+			customer_id: customerId,
+		},
 	});
 	if (!customer) throw createError('Customer not found', 404);
 
@@ -104,7 +109,11 @@ exports.deleteCustomer = async (customerId, tenantUserPayload) => {
 
 	// 2. Find customer
 	const customer = await Customer.findOne({
-		where: { customer_id: customerId },
+		where: {
+			tenant_id: tenantUserPayload.tenant_id,
+			organization_id: tenantUserPayload.organization_id,
+			customer_id: customerId,
+		},
 	});
 	if (!customer) throw createError('Customer not found', 404);
 
@@ -133,7 +142,11 @@ exports.getCustomerById = async (customerId, tenantUserPayload) => {
 
 	// 2. Find customer
 	const customer = await Customer.findOne({
-		where: { customer_id: customerId },
+		where: {
+			tenant_id: tenantUserPayload.tenant_id,
+			organization_id: tenantUserPayload.organization_id,
+			customer_id: customerId,
+		},
 	});
 	if (!customer) throw createError('Customer not found', 404);
 
@@ -144,52 +157,76 @@ exports.getCustomerById = async (customerId, tenantUserPayload) => {
 	};
 };
 
-// Get All Customers (tenant/org scoped)
-exports.getAllCustomers = async (tenantPayload, page = 1, limit = 10) => {
+// Get All Customers (tenant/org scoped + filters + aggregation)
+exports.getAllCustomers = async (
+	tenantPayload,
+	page = 1,
+	limit = 10,
+	search = null,
+	status = null
+) => {
 	const { tenant_id, organization_id } = tenantPayload;
 
 	await checkPermission({ tenant_id, organization_id }, 'customer');
 
 	const offset = (page - 1) * limit;
 
+	// 🔎 Build where clause
+	const whereClause = { tenant_id, organization_id };
+
+	if (status) {
+		whereClause.status = status;
+	}
+
+	if (search) {
+		whereClause[Op.or] = [
+			{ name: { [Op.like]: `%${search}%` } },
+			{ phone: { [Op.like]: `%${search}%` } },
+			{ email: { [Op.like]: `%${search}%` } },
+		];
+	}
+
+	// 📄 Fetch paginated rows
 	const { count, rows } = await Customer.findAndCountAll({
-		where: { tenant_id, organization_id },
-		order: [['createdAt', 'ASC']],
+		where: whereClause,
+		order: [['createdAt', 'DESC']],
 		limit,
 		offset,
 		paranoid: true,
 	});
 
-	// Aggregation counts
+	// 📊 Aggregation counts (global org-wide, not filtered)
 	const totalCustomers = await Customer.count({
 		where: { tenant_id, organization_id },
 		paranoid: false,
 	});
 
-	// Aggregation counts
 	const onlineCount = await Customer.count({
 		where: { tenant_id, organization_id, status: 'online' },
-		paranoid: true, // only active
+		paranoid: true,
 	});
 
 	const offlineCount = await Customer.count({
 		where: { tenant_id, organization_id, status: 'offline' },
-		paranoid: true, // only active
+		paranoid: true,
 	});
 
-	// Deleted customers = total - active
 	const deletedCount = await Customer.count({
 		where: { tenant_id, organization_id, status: 'deleted' },
 		paranoid: false,
 	});
 
-	// Active customers = not deleted
 	const activeCount = await Customer.count({
-		where: { tenant_id, organization_id },
-		paranoid: true, // only non-deleted rows
+		where: { tenant_id, organization_id, status: 'active' },
+		paranoid: true,
 	});
 
-	// New customers this month
+	const inActiveCount = await Customer.count({
+		where: { tenant_id, organization_id, status: 'inactive' },
+		paranoid: true,
+	});
+
+	// 📆 New customers this month
 	const today = new Date();
 	const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
 
@@ -201,10 +238,10 @@ exports.getAllCustomers = async (tenantPayload, page = 1, limit = 10) => {
 		(c) => c.createdAt >= startOfMonth
 	).length;
 
-	// Sum total_spent of active customers
+	// 💰 Sum total_spent of active customers
 	const activeCustomers = await Customer.findAll({
 		where: { tenant_id, organization_id },
-		paranoid: true, // only non-deleted
+		paranoid: true,
 	});
 
 	const totalSpentSum = activeCustomers.reduce(
@@ -220,8 +257,9 @@ exports.getAllCustomers = async (tenantPayload, page = 1, limit = 10) => {
 		offline_count: offlineCount,
 		deleted_count: deletedCount,
 		active_count: activeCount,
+		inactive_count: inActiveCount,
 		new_this_month: newThisMonth,
-		total_spent: totalSpentSum.toFixed(2), // ✅ total spent sum
+		total_spent: totalSpentSum.toFixed(2),
 		totalPages: Math.ceil(count / limit),
 		data: formatDatesTime(rows, { includeDeletedAt: true }),
 	};

@@ -31,7 +31,8 @@ module.exports = (sequelize, DataTypes) => {
 					'couriered',
 					'delivered',
 					'canceled',
-					'refunded'
+					'refunded',
+					'deleted'
 				),
 				defaultValue: 'new',
 			},

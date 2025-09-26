@@ -19,7 +19,7 @@ router.post(
 
 // Update Store
 router.put(
-	'/:tenantId/:organizationId/:storeId/update',
+	'/:tenantId/:organizationId/update',
 	authenticate,
 	verifyTenant,
 	upload.single('storeLogo'),
@@ -28,7 +28,7 @@ router.put(
 
 // Soft Delete Store
 router.delete(
-	'/:tenantId/:organizationId/:storeId/delete',
+	'/:tenantId/:organizationId/delete',
 	authenticate,
 	verifyTenant,
 	storeController.delete
@@ -36,7 +36,7 @@ router.delete(
 
 // Get One Store
 router.get(
-	'/:tenantId/:organizationId/:storeId/list',
+	'/:tenantId/:organizationId/list',
 	authenticate,
 	verifyTenant,
 	storeController.getById

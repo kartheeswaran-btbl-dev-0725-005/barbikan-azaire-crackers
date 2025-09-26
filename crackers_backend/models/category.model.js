@@ -24,14 +24,8 @@ module.exports = (sequelize, DataTypes) => {
 				allowNull: true,
 			},
 			group_by: {
-				type: DataTypes.ENUM(
-					'Retail',
-					'Combo Pack',
-					'Wholesale',
-					'Gift Box',
-					'Family Pack'
-				),
-				defaultValue: 'Retail',
+				type: DataTypes.STRING,
+				allowNull: true,
 			},
 			status: {
 				type: DataTypes.ENUM('active', 'inactive', 'deleted'),

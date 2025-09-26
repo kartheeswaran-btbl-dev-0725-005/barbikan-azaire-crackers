@@ -83,17 +83,17 @@ exports.createStore = async (tenantUserPayload, payload) => {
 };
 
 // Update Store
-exports.updateStore = async (storeId, payload, tenantUserPayload) => {
+exports.updateStore = async (payload, tenantUserPayload) => {
 	await checkPermission(tenantUserPayload, 'store');
 
 	const { value, error } = updateStoreSchema.validate(payload);
 	if (error) throw createError(error.details[0].message, 400);
 
 	// Remove tenant_id and organization_id to prevent update
-	delete value.tenant_id;
-	delete value.organization_id; // ✅ fixed: was checking wrong before
 
-	const store = await Store.findOne({ where: { store_id: storeId } });
+	const store = await Store.findOne({
+		where: { tenant_id: value.tenant_id, organization_id: value.organization_id },
+	});
 	if (!store) throw createError('Store not found', 404);
 
 	// Update the store with all provided fields
@@ -130,10 +130,15 @@ exports.updateStore = async (storeId, payload, tenantUserPayload) => {
 };
 
 // Soft Delete Store
-exports.deleteStore = async (storeId, tenantUserPayload) => {
+exports.deleteStore = async (tenantUserPayload) => {
 	await checkPermission(tenantUserPayload, 'store');
 
-	const store = await Store.findOne({ where: { store_id: storeId } });
+	const store = await Store.findOne({
+		where: {
+			tenant_id: tenantUserPayload.tenant_id,
+			organization_id: tenantUserPayload.organization_id,
+		},
+	});
 	if (!store) throw createError('Store not found', 404);
 
 	await store.update({ status: 'deleted' });
@@ -146,14 +151,13 @@ exports.deleteStore = async (storeId, tenantUserPayload) => {
 };
 
 // Get One Store
-exports.getStoreById = async (tenantUserPayload, storeId) => {
+exports.getStoreById = async (tenantUserPayload) => {
 	await checkPermission(tenantUserPayload, 'store');
 
 	const store = await Store.findOne({
 		where: {
 			tenant_id: tenantUserPayload.tenant_id,
 			organization_id: tenantUserPayload.organization_id,
-			store_id: storeId,
 		},
 	});
 

@@ -7,10 +7,13 @@ module.exports = (sequelize, DataTypes) => {
 				allowNull: false,
 				primaryKey: true,
 			},
+			customer_code: {
+				type: DataTypes.STRING,
+			},
 			tenant_id: { type: DataTypes.STRING, allowNull: false },
 			organization_id: { type: DataTypes.STRING, allowNull: false },
 			name: { type: DataTypes.STRING, allowNull: false },
-			phone: { type: DataTypes.STRING, allowNull: false },
+			phone: { type: DataTypes.STRING, allowNull: true },
 			email: { type: DataTypes.STRING },
 			address: { type: DataTypes.TEXT },
 			status: {

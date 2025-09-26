@@ -25,7 +25,8 @@ exports.createEstimateSchema = Joi.object({
 			'couriered',
 			'delivered',
 			'canceled',
-			'refunded'
+			'refunded',
+			'deleted'
 		)
 		.default('new'),
 
@@ -73,7 +74,8 @@ exports.updateEstimateSchema = Joi.object({
 			'couriered',
 			'delivered',
 			'canceled',
-			'refunded'
+			'refunded',
+			'deleted'
 		)
 		.optional(),
 	notes: Joi.string().max(500).optional().allow(null, ''),

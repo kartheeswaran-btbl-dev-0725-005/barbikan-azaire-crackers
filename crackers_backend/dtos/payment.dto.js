@@ -7,11 +7,12 @@ exports.PaymentMethodDTO = (req) => {
 		phone_number: req.body?.phoneNumber || '',
 		bank_name: req.body?.bankName || null,
 
+		// Bank-specific fields
 		account_number: req.body?.accountNumber || null,
 		ifsc_code: req.body?.ifscCode || null,
 
 		// UPI-specific fields
 		upi_id: req.body?.upiId || null,
-		qr_code: req.file?.filename || null, // 👈 use req.file for single upload
+		qr_code: req.file?.filename || null,
 	};
 };

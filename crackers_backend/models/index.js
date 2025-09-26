@@ -26,10 +26,9 @@ db.Invitation = require('./invitation.model')(sequelize, Sequelize.DataTypes);
 db.Customer = require('./customer.model')(sequelize, Sequelize.DataTypes);
 db.Category = require('./category.model')(sequelize, Sequelize.DataTypes);
 db.Product = require('./product.model')(sequelize, Sequelize.DataTypes);
+db.GroupBy = require('./GroupBy.model')(sequelize, Sequelize.DataTypes);
 db.StockLog = require('./stockLog.model')(sequelize, Sequelize.DataTypes);
 db.Payment = require('./payment.model')(sequelize, Sequelize.DataTypes);
-db.BankPayment = require('./bankPayment.model')(sequelize, Sequelize.DataTypes);
-db.UpiPayment = require('./upiPayment.model')(sequelize, Sequelize.DataTypes);
 db.Store = require('./store.model')(sequelize, Sequelize.DataTypes);
 db.Estimate = require('./estimate.model')(sequelize, Sequelize.DataTypes);
 // prettier-ignore

@@ -35,6 +35,24 @@ module.exports = (sequelize, DataTypes) => {
 				type: DataTypes.ENUM('active', 'inactive', 'deleted'),
 				defaultValue: 'active',
 			},
+			// Bank fields
+			account_number: {
+				type: DataTypes.STRING,
+				allowNull: true,
+			},
+			ifsc_code: {
+				type: DataTypes.STRING,
+				allowNull: true,
+			},
+			// UPI fields
+			upi_id: {
+				type: DataTypes.STRING,
+				allowNull: true,
+			},
+			qr_code: {
+				type: DataTypes.TEXT,
+				allowNull: true,
+			},
 		},
 		{
 			tableName: 'payments',
@@ -42,17 +60,6 @@ module.exports = (sequelize, DataTypes) => {
 			paranoid: true, // soft delete
 		}
 	);
-
-	Payment.associate = (models) => {
-		Payment.hasOne(models.BankPayment, {
-			foreignKey: 'payment_id',
-			as: 'bankDetails',
-		});
-		Payment.hasOne(models.UpiPayment, {
-			foreignKey: 'payment_id',
-			as: 'upiDetails',
-		});
-	};
 
 	return Payment;
 };

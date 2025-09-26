@@ -10,8 +10,9 @@ const { formatDatesTime } = require('../utils/formatdatetime.util');
 const { sequelize } = require('../models'); // make sure sequelize instance is imported
 const fs = require('fs');
 const path = require('path');
+const { Op } = require('sequelize');
 
-// Create Product Service
+// Create Product Service with safe ID generation
 exports.createProduct = async (tenantUserPayload, payload) => {
 	// Permission check
 	await checkPermission(tenantUserPayload, 'product');
@@ -22,34 +23,51 @@ exports.createProduct = async (tenantUserPayload, payload) => {
 
 	// Check category
 	const isCategory = await Category.findOne({
-		where: { category_id: payload.category_id },
+		where: {
+			tenant_id: tenantUserPayload.tenant_id,
+			organization_id: tenantUserPayload.organization_id,
+			category_id: payload.category_id,
+		},
 		paranoid: true,
 	});
 
 	if (!isCategory) throw createError('Invalid category', 400);
 
-	// Generate product_id
-	const productId = await generateProductId();
+	// Use transaction to prevent race conditions
+	const product = await sequelize.transaction(async (t) => {
+		// Generate product_id safely
+		const productId = await generateProductId(t);
 
-	// Generate product_code for this organization using MAX
-	const lastProduct = await Product.findOne({
-		where: { organization_id: payload.organization_id },
-		attributes: [
-			[sequelize.literal('MAX(CAST(product_code AS UNSIGNED))'), 'max_code'],
-		],
-		raw: true,
-	});
+		// Generate product_code for this organization safely
+		const lastProduct = await Product.findOne({
+			where: {
+				tenant_id: tenantUserPayload.tenant_id,
+				organization_id: payload.organization_id,
+			},
+			attributes: [
+				[sequelize.literal('MAX(CAST(product_code AS UNSIGNED))'), 'max_code'],
+			],
+			raw: true,
+			transaction: t,
+			lock: t.LOCK.UPDATE, // ✅ lock row to prevent race condition
+		});
 
-	let nextCode = '01'; // default if no product exists
-	if (lastProduct && lastProduct.max_code) {
-		nextCode = String(parseInt(lastProduct.max_code) + 1).padStart(2, '0');
-	}
+		let nextCode = '01'; // default if no product exists
+		if (lastProduct && lastProduct.max_code) {
+			nextCode = String(parseInt(lastProduct.max_code) + 1).padStart(2, '0');
+		}
 
-	// Create product with product_code
-	const product = await Product.create({
-		product_id: productId,
-		product_code: nextCode,
-		...payload,
+		// Create product with transaction
+		const createdProduct = await Product.create(
+			{
+				product_id: productId,
+				product_code: nextCode,
+				...payload,
+			},
+			{ transaction: t }
+		);
+
+		return createdProduct;
 	});
 
 	return {
@@ -69,14 +87,22 @@ exports.updateProduct = async (productId, payload, tenantUserPayload) => {
 
 	// Find product
 	const product = await Product.findOne({
-		where: { product_id: productId },
+		where: {
+			tenant_id: tenantUserPayload.tenant_id,
+			organization_id: tenantUserPayload.organization_id,
+			product_id: productId,
+		},
 	});
 	if (!product) throw createError('Product not found', 404);
 
 	// Check category existence
 	if (payload.category_id) {
 		const category = await Category.findOne({
-			where: { category_id: payload.category_id },
+			where: {
+				tenant_id: tenantUserPayload.tenant_id,
+				organization_id: tenantUserPayload.organization_id,
+				category_id: payload.category_id,
+			},
 		});
 		if (!category) throw createError('Category not found', 404);
 	}
@@ -95,7 +121,11 @@ exports.deleteProduct = async (productId, tenantUserPayload) => {
 	await checkPermission(tenantUserPayload, 'product');
 
 	const product = await Product.findOne({
-		where: { product_id: productId },
+		where: {
+			tenant_id: tenantUserPayload.tenant_id,
+			organization_id: tenantUserPayload.organization_id,
+			product_id: productId,
+		},
 	});
 	if (!product) throw createError('Product not found', 404);
 
@@ -116,7 +146,11 @@ exports.getProductById = async (tenantUserPayload, productId) => {
 
 	// Include deleted records
 	const product = await Product.findOne({
-		where: { product_id: productId },
+		where: {
+			tenant_id: tenantUserPayload.tenant_id,
+			organization_id: tenantUserPayload.organization_id,
+			product_id: productId,
+		},
 		paranoid: false,
 	});
 
@@ -140,7 +174,13 @@ exports.getProductById = async (tenantUserPayload, productId) => {
 };
 
 // Get all products with full details + summary
-exports.getAllProducts = async (tenantPayload, page = 1, limit = 10) => {
+exports.getAllProducts = async (
+	tenantPayload,
+	page = 1,
+	limit = 10,
+	categoryId = null,
+	productName = null
+) => {
 	const { tenant_id, organization_id } = tenantPayload;
 
 	// 1. Permission check
@@ -149,9 +189,20 @@ exports.getAllProducts = async (tenantPayload, page = 1, limit = 10) => {
 	// 2. Pagination setup
 	const offset = (page - 1) * limit;
 
-	// 3. Fetch paginated products including category
+	// 3. Build where condition
+	const whereClause = { tenant_id, organization_id };
+
+	if (categoryId) {
+		whereClause.category_id = categoryId;
+	}
+
+	if (productName) {
+		whereClause.name = { [Op.like]: `%${productName}%` };
+	}
+
+	// 4. Fetch paginated products including category
 	const { count, rows } = await Product.findAndCountAll({
-		where: { tenant_id, organization_id },
+		where: whereClause,
 		order: [['createdAt', 'ASC']],
 		limit,
 		offset,
@@ -164,22 +215,26 @@ exports.getAllProducts = async (tenantPayload, page = 1, limit = 10) => {
 			},
 		],
 	});
-	// 4. Compute summary metrics
+
+	// 5️⃣ Handle empty products (return empty array instead of error)
+	if (count === 0) {
+		return {
+			success: true,
+			message: 'No products found',
+			data: [],
+		};
+	}
+
+	// Compute summary metrics
 	let lowStockCount = 0;
 	let criticalStockCount = 0;
 	let totalValue = 0;
 
 	const formattedData = rows.map((product) => {
-		// Determine stock status
 		let productValue = 0;
+		if (product.stock_quantity < product.minimum_stock / 2) criticalStockCount++;
+		else if (product.stock_quantity < product.minimum_stock) lowStockCount++;
 
-		if (product.stock_quantity < product.minimum_stock / 2) {
-			criticalStockCount++;
-		} else if (product.stock_quantity < product.minimum_stock) {
-			lowStockCount++;
-		}
-
-		// Total value
 		if (product.price && product.stock_quantity) {
 			productValue = parseFloat(product.price) * parseInt(product.stock_quantity);
 			totalValue += productValue;
@@ -191,7 +246,7 @@ exports.getAllProducts = async (tenantPayload, page = 1, limit = 10) => {
 			product_name: product.name,
 			category_id: product.category?.category_id || null,
 			category_name: product.category?.name || null,
-			group_by: product.category?.group_by || null, // ✅ new field
+			group_by: product.category?.group_by || null,
 			price: product.price,
 			stock_quantity: product.stock_quantity,
 			unit_type: product.unit_type,
@@ -214,7 +269,7 @@ exports.getAllProducts = async (tenantPayload, page = 1, limit = 10) => {
 		message: 'Products fetched successfully',
 		total_products: count,
 		low_stock_count: lowStockCount,
-		critical_stock_count: criticalStockCount, // ✅ added
+		critical_stock_count: criticalStockCount,
 		total_value: totalValue.toLocaleString('en-IN'),
 		totalPages: Math.ceil(count / limit),
 		data: formatDatesTime(formattedData),
@@ -222,8 +277,8 @@ exports.getAllProducts = async (tenantPayload, page = 1, limit = 10) => {
 };
 
 // Public service
-const UPLOADS_DIR = path.join(__dirname, '..', 'uploads'); // go one level up from services
 // Get all products with filter groupby
+const UPLOADS_DIR = path.join(__dirname, '..', 'uploads'); // go one level up from services
 exports.getAllProductsGroupby = async (tenantPayload, groupBy = null) => {
 	const { organization_id } = tenantPayload;
 

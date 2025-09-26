@@ -103,10 +103,16 @@ exports.getAll = async (req, res) => {
 		const page = parseInt(req.query.page) || 1;
 		const limit = parseInt(req.query.limit) || 10;
 
+		// Filters
+		const search = req.query.search || null;
+		const status = req.query.status || null;
+
 		const result = await customerService.getAllCustomers(
 			tenantPayload,
 			page,
-			limit
+			limit,
+			search,
+			status
 		);
 
 		res.status(200).json(result);

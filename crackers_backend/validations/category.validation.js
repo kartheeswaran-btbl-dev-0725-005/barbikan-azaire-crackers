@@ -7,9 +7,7 @@ const createCategorySchema = Joi.object({
 	name: Joi.string().min(3).max(100).required(),
 	description: Joi.string().allow('').optional(),
 	status: Joi.string().valid('active', 'inactive', 'deleted').default('active'),
-	group_by: Joi.string()
-		.valid('Retail', 'Combo Pack', 'Wholesale', 'Gift Box', 'Family Pack')
-		.default('Retail'),
+	group_by: Joi.string().optional(),
 });
 
 const updateCategorySchema = Joi.object({
@@ -21,9 +19,7 @@ const updateCategorySchema = Joi.object({
 		.valid('active', 'inactive', 'deleted')
 		.default('active')
 		.optional(),
-	group_by: Joi.string()
-		.valid('Retail', 'Combo Pack', 'Wholesale', 'Gift Box', 'Family Pack')
-		.default('Retail'),
+	group_by: Joi.string().optional(),
 });
 
 module.exports = {

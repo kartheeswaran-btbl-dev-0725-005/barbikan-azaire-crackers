@@ -1,7 +1,7 @@
 const paymentService = require('../services/payment.service');
 const { PaymentMethodDTO } = require('../dtos/payment.dto');
 
-// Create Payment Method
+// Create Payment
 exports.create = async (req, res) => {
 	try {
 		const dto = PaymentMethodDTO(req);
@@ -20,7 +20,7 @@ exports.create = async (req, res) => {
 	}
 };
 
-// Update Payment Method
+// Update Payment
 exports.update = async (req, res) => {
 	try {
 		const dto = PaymentMethodDTO(req);
@@ -44,7 +44,7 @@ exports.update = async (req, res) => {
 	}
 };
 
-// Soft Delete Payment Method
+// Delete Payment
 exports.delete = async (req, res) => {
 	try {
 		const dto = PaymentMethodDTO(req);
@@ -64,7 +64,7 @@ exports.delete = async (req, res) => {
 	}
 };
 
-// Get One Payment Method
+// Get One Payment
 exports.getById = async (req, res) => {
 	try {
 		const dto = PaymentMethodDTO(req);
@@ -84,7 +84,7 @@ exports.getById = async (req, res) => {
 	}
 };
 
-// Get All Payment Methods
+// Get All Payments
 exports.getAll = async (req, res) => {
 	try {
 		const dto = PaymentMethodDTO(req);
